@@ -14,11 +14,11 @@ app.use(express.json());
 
 // 4. Conectar a la Base de Datos
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'mi_app_db'
-  // No multipleStatements: true (es más seguro)
+  host: process.env.MYSQLHOST,       // Railway te dará esta variable
+  user: process.env.MYSQLUSER,       // Railway te dará esta variable
+  password: process.env.MYSQLPASSWORD, // Railway te dará esta variable
+  database: process.env.MYSQLDATABASE, // Railway te dará esta variable
+  port: process.env.MYSQLPORT        // Railway te dará esta variable
 });
 
 // Verificador de conexión
@@ -294,8 +294,10 @@ app.get('/cursos/:usuarioId', (req, res) => {
 // --- FIN RUTA CURSOS ---
 
 // 10. Encender el servidor
-const PORT = 3000;
+// Railway te da el puerto a través de process.env.PORT
+// Si no existe (para pruebas locales), usa 3000
+const PORT = process.env.PORT || 3000; 
+
 app.listen(PORT, () => {
-  console.log(`*** Servidor API (Mesero) corriendo en http://localhost:${PORT} ***`);
-  console.log('*** (No cierres esta terminal) ***');
+  console.log(`*** Servidor API (Mesero) corriendo en el puerto ${PORT} ***`);
 });
