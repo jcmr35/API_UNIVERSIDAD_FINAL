@@ -38,7 +38,7 @@ app.post('/login', (req, res) => {
     SELECT id, nombre_completo, email, codigo_alumno, dni, carrera
     FROM usuarios
     WHERE email = ? AND password = ?
-  `;
+  `; // Asegúrate que tu columna se llame 'nombre_completo'
 
   db.query(query, [usuario, password], (err, results) => {
     if (err) {
@@ -47,14 +47,14 @@ app.post('/login', (req, res) => {
     }
     if (results.length > 0) {
       const usuarioEncontrado = results[0];
-      console.log(`Login exitoso para: ${usuarioEncontrado.nombre} (ID: ${usuarioEncontrado.id})`);
+      console.log(`Login exitoso para: ${usuarioEncontrado.nombre_completo} (ID: ${usuarioEncontrado.id})`);
       // Devuelve los datos dentro de un objeto 'userData'
       res.json({
         status: 'success',
         message: 'Login correcto',
         userData: { // <-- Objeto que espera Flutter
             usuarioId: usuarioEncontrado.id,
-            nombreCompleto: usuarioEncontrado.nombre,
+            nombreCompleto: usuarioEncontrado.nombre_completo,
             email: usuarioEncontrado.email,
             codigoAlumno: usuarioEncontrado.codigo_alumno,
             dni: usuarioEncontrado.dni,
