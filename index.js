@@ -89,28 +89,38 @@ app.post('/comedor/reservar', (req, res) => {
       const usuarioId = users[0].id;
       
       // --- ¡MODIFICACIÓN DE HORA (Simple)! ---
-      const fechaActualUTC = new Date(); // Hora UTC del servidor (Railway)
+      const fechaActualUTC = new Date(); 
+      const hoyStr = format(fechaActualUTC, 'yyyy-MM-dd'); // Fecha (Día) en UTC
+      let horaActual = getHours(fechaActualUTC) - 5; // Hora (0-23) de Perú (calculada)
       
-      // Usa la fecha UTC para la BD. (ADVERTENCIA: Si son las 2AM UTC (9PM en Perú), 
-      // esto guardará la reserva para el DÍA SIGUIENTE. Es el riesgo de este método simple).
-      const hoyStr = format(fechaActualUTC, 'yyyy-MM-dd'); 
+      // --- LÍNEA AÑADIDA PARA MINUTOS ---
+      // Obtenemos los minutos UTC y los formateamos (ej: '05', '30')
+      const minutosActuales = format(fechaActualUTC, 'mm'); 
       
-      // Obtiene la hora UTC (0-23) y le RESTA 5 para simular la hora de Perú
-      let horaActual = getHours(fechaActualUTC) - 5; 
-      
-      // Ajuste simple si la resta da negativo (ej. 2 AM UTC - 5 = -3)
       if (horaActual < 0) {
-          horaActual = horaActual + 24; // (ej: -3 + 24 = 21, o sea 9 PM en Perú)
+          horaActual = horaActual + 24; // Ajusta la hora si es día anterior
+          // Advertencia: hoyStr seguirá siendo la fecha UTC, 
+          // así que las reservas entre 7pm-medianoche de Perú se guardarán para el día siguiente.
       }
-      // --- FIN DE LA MODIFICACIÓN DE HORA ---
+      
+      // --- LÍNEA AÑADIDA PARA LOG COMPLETO ---
+      // Crea un string HH:mm (ej: "13:05")
+      const horaYMinutosPeru = `${horaActual.toString().padStart(2, '0')}:${minutosActuales}`;
+      // --- FIN DE LÍNEA AÑADIDA ---
 
-      console.log(`Hora UTC: ${getHours(fechaActualUTC)}, Hora (calculada) Perú: ${horaActual}`); // Log
+      // --- CONSOLE LOG MODIFICADO ---
+      console.log(`Hora UTC: ${format(fechaActualUTC, 'HH:mm')}, Hora (calculada) Perú: ${horaYMinutosPeru}`);
+      // --- FIN DE MODIFICACIÓN ---
 
-      let tipoComida; // Determinar tipoComida... (esta lógica ahora usa la hora calculada)
+      let tipoComida; // Determinar tipoComida...
       if (horaActual >= 7 && horaActual < 10) { tipoComida = 'Desayuno'; }
       else if (horaActual >= 12 && horaActual < 16) { tipoComida = 'Almuerzo'; }
       else if (horaActual >= 18 && horaActual < 21) { tipoComida = 'Cena'; }
-      else { return db.rollback(() => res.json({ status: 'error', message: `No hay servicio de comedor disponible en este horario (${horaActual}h en Perú)` })); }
+      else { 
+          // --- MENSAJE DE ERROR MODIFICADO ---
+          // Usa el string HH:mm
+          return db.rollback(() => res.json({ status: 'error', message: `No hay servicio de comedor disponible en este horario (${horaYMinutosPeru} en Perú)` })); 
+      }
 
       // ... (El resto de tu lógica de transacción continúa igual) ...
       const queryVerificarReserva = 'SELECT id FROM reservas_comedor WHERE usuario_id = ? AND fecha_reserva = ? AND tipo_comida = ?';
