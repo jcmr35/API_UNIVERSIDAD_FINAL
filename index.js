@@ -4,7 +4,7 @@ const mysql = require('mysql2');
 const cors = require('cors');
 
 // Importa las funciones necesarias de date-fns
-// YA NO NECESITAMOS date-fns-tz
+// ¡YA NO NECESITAMOS date-fns-tz!
 const { eachDayOfInterval, getDay, parseISO, format, getHours, startOfDay, endOfDay } = require('date-fns');
 
 // 2. Crear el servidor API
@@ -16,11 +16,11 @@ app.use(express.json());
 
 // 4. Conectar a la Base de Datos
 const db = mysql.createConnection({
-  host: process.env.MYSQLHOST,     // Railway te dará esta variable
-  user: process.env.MYSQLUSER,     // Railway te dará esta variable
-  password: process.env.MYSQLPASSWORD, // Railway te dará esta variable
-  database: process.env.MYSQLDATABASE, // Railway te dará esta variable
-  port: process.env.MYSQLPORT        // Railway te dará esta variable
+  host: process.env.MYSQLHOST,
+  user: process.env.MYSQLUSER,
+  password: process.env.MYSQLPASSWORD,
+  database: process.env.MYSQLDATABASE,
+  port: process.env.MYSQLPORT
 });
 
 // Verificador de conexión
@@ -34,8 +34,32 @@ db.connect(err => {
 
 // --- RUTA DE LOGIN (ACTUALIZADA para devolver más datos) ---
 app.post('/login', (req, res) => {
-  // ... (Tu código de login sin cambios) ...
-  const { usuario, password } = req.body; const query = ` SELECT id, nombre_completo, email, codigo_alumno, dni, carrera FROM usuarios WHERE email = ? AND password = ? `; db.query(query, [usuario, password], (err, results) => { if (err) { console.error('Error en la consulta de login:', err); return res.status(500).json({ status: 'error', message: 'Error del servidor' }); } if (results.length > 0) { const usuarioEncontrado = results[0]; console.log(`Login exitoso para: ${usuarioEncontrado.nombre_completo} (ID: ${usuarioEncontrado.id})`); res.json({ status: 'success', message: 'Login correcto', userData: { usuarioId: usuarioEncontrado.id, nombreCompleto: usuarioEncontrado.nombre_completo, email: usuarioEncontrado.email, codigoAlumno: usuarioEncontrado.codigo_alumno, dni: usuarioEncontrado.dni, carrera: usuarioEncontrado.carrera } }); } else { console.log('Login fallido: credenciales incorrectas'); res.json({ status: 'error', message: 'Usuario o contraseña incorrectos' }); } });
+  const { usuario, password } = req.body;
+  const query = `
+    SELECT id, nombre_completo, email, codigo_alumno, dni, carrera
+    FROM usuarios
+    WHERE email = ? AND password = ?
+  `; 
+
+  db.query(query, [usuario, password], (err, results) => {
+    if (err) { console.error('Error en la consulta de login:', err); return res.status(500).json({ status: 'error', message: 'Error del servidor' }); }
+    if (results.length > 0) {
+      const usuarioEncontrado = results[0];
+      console.log(`Login exitoso para: ${usuarioEncontrado.nombre_completo} (ID: ${usuarioEncontrado.id})`);
+      res.json({
+        status: 'success',
+        message: 'Login correcto',
+        userData: { 
+            usuarioId: usuarioEncontrado.id,
+            nombreCompleto: usuarioEncontrado.nombre_completo,
+            email: usuarioEncontrado.email,
+            codigoAlumno: usuarioEncontrado.codigo_alumno,
+            dni: usuarioEncontrado.dni,
+            carrera: usuarioEncontrado.carrera
+        }
+      });
+    } else { console.log('Login fallido: credenciales incorrectas'); res.json({ status: 'error', message: 'Usuario o contraseña incorrectos' }); }
+  });
 });
 // --- FIN RUTA LOGIN ---
 
@@ -43,23 +67,21 @@ app.post('/login', (req, res) => {
 // --- RUTA DE HORARIO (CON RECURRENCIAS) ---
 app.get('/horario/:usuarioId', (req, res) => {
   // ... (Tu código de horario sin cambios) ...
-  const usuarioId = req.params.usuarioId; let fechaInicioRango, fechaFinRango; try { fechaInicioRango = req.query.inicio ? parseISO(req.query.inicio) : null; fechaFinRango = req.query.fin ? parseISO(req.query.fin) : null; if (!fechaInicioRango || !fechaFinRango || isNaN(fechaInicioRango) || isNaN(fechaFinRango) || fechaInicioRango > fechaFinRango) { throw new Error('Fechas inválidas'); } } catch (error) { console.error('Error parseando fechas:', error.message); return res.status(400).json({ status: 'error', message: 'Rango de fechas inválido o faltante (formato YYYY-MM-DD)' }); } console.log(`Petición de horario para UserID ${usuarioId} entre ${format(fechaInicioRango, 'yyyy-MM-dd')} y ${format(fechaFinRango, 'yyyy-MM-dd')}`); const queryReglas = ` SELECT r.id, r.curso_id, r.dia_semana, r.hora_inicio, r.hora_fin, r.fecha_inicio_validez, r.fecha_fin_validez, r.aula, c.nombre_curso FROM reglas_horario r JOIN cursos c ON r.curso_id = c.id WHERE r.usuario_id = ? AND r.fecha_inicio_validez <= ? AND r.fecha_fin_validez >= ? `; db.query(queryReglas, [usuarioId, format(fechaFinRango, 'yyyy-MM-dd'), format(fechaInicioRango, 'yyyy-MM-dd')], (err, reglas) => { if (err) { console.error('Error al consultar reglas de horario:', err); return res.status(500).json({ status: 'error', message: 'Error del servidor al buscar reglas' }); } console.log(`Encontradas ${reglas.length} reglas aplicables.`); const eventosGenerados = []; let diasEnRango = []; try { diasEnRango = eachDayOfInterval({ start: fechaInicioRango, end: fechaFinRango }); } catch (error) { console.error("Error generando intervalo:", error); return res.status(500).json({ status: 'error', message: 'Error interno generando fechas' }); } diasEnRango.forEach(diaActual => { const diaSemanaActual = getDay(diaActual); reglas.forEach(regla => { const inicioValidezRegla = new Date(regla.fecha_inicio_validez); const finValidezRegla = new Date(regla.fecha_fin_validez); finValidezRegla.setUTCHours(23, 59, 59, 999); if (regla.dia_semana === diaSemanaActual && diaActual >= inicioValidezRegla && diaActual <= finValidezRegla) { const horaInicioParts = regla.hora_inicio.split(':'); const horaFinParts = regla.hora_fin.split(':'); const fechaHoraInicio = new Date(Date.UTC( diaActual.getUTCFullYear(), diaActual.getUTCMonth(), diaActual.getUTCDate(), parseInt(horaInicioParts[0]), parseInt(horaInicioParts[1]), parseInt(horaInicioParts[2] || '00') )); const fechaHoraFin = new Date(Date.UTC( diaActual.getUTCFullYear(), diaActual.getUTCMonth(), diaActual.getUTCDate(), parseInt(horaFinParts[0]), parseInt(horaFinParts[1]), parseInt(horaFinParts[2] || '00') )); eventosGenerados.push({ id: `regla-${regla.id}-dia-${format(diaActual, 'yyyyMMdd')}`, nombre_curso: regla.nombre_curso, fecha_hora_inicio: fechaHoraInicio.toISOString(), fecha_hora_fin: fechaHoraFin.toISOString(), aula: regla.aula }); } }); }); console.log(`Generados ${eventosGenerados.length} eventos.`); res.json({ status: 'success', eventos: eventosGenerados }); });
+  const usuarioId = req.params.usuarioId; let fechaInicioRango, fechaFinRango; try { fechaInicioRango = req.query.inicio ? parseISO(req.query.inicio) : null; fechaFinRango = req.query.fin ? parseISO(req.query.fin) : null; if (!fechaInicioRango || !fechaFinRango || isNaN(fechaInicioRango) || isNaN(fechaFinRango) || fechaInicioRango > fechaFinRango) { throw new Error('Fechas inválidas'); } } catch (error) { console.error('Error parseando fechas:', error.message); return res.status(400).json({ status: 'error', message: 'Rango de fechas inválido o faltante (formato YYYY-MM-DD)' }); } const queryReglas = ` SELECT r.id, r.curso_id, r.dia_semana, r.hora_inicio, r.hora_fin, r.fecha_inicio_validez, r.fecha_fin_validez, r.aula, c.nombre_curso FROM reglas_horario r JOIN cursos c ON r.curso_id = c.id WHERE r.usuario_id = ? AND r.fecha_inicio_validez <= ? AND r.fecha_fin_validez >= ? `; db.query(queryReglas, [usuarioId, format(fechaFinRango, 'yyyy-MM-dd'), format(fechaInicioRango, 'yyyy-MM-dd')], (err, reglas) => { if (err) { console.error('Error al consultar reglas de horario:', err); return res.status(500).json({ status: 'error', message: 'Error del servidor al buscar reglas' }); } const eventosGenerados = []; let diasEnRango = []; try { diasEnRango = eachDayOfInterval({ start: fechaInicioRango, end: fechaFinRango }); } catch (error) { console.error("Error generando intervalo:", error); return res.status(500).json({ status: 'error', message: 'Error interno generando fechas' }); } diasEnRango.forEach(diaActual => { const diaSemanaActual = getDay(diaActual); reglas.forEach(regla => { const inicioValidezRegla = new Date(regla.fecha_inicio_validez); const finValidezRegla = new Date(regla.fecha_fin_validez); finValidezRegla.setUTCHours(23, 59, 59, 999); if (regla.dia_semana === diaSemanaActual && diaActual >= inicioValidezRegla && diaActual <= finValidezRegla) { const horaInicioParts = regla.hora_inicio.split(':'); const horaFinParts = regla.hora_fin.split(':'); const fechaHoraInicio = new Date(Date.UTC( diaActual.getUTCFullYear(), diaActual.getUTCMonth(), diaActual.getUTCDate(), parseInt(horaInicioParts[0]), parseInt(horaInicioParts[1]), parseInt(horaInicioParts[2] || '00') )); const fechaHoraFin = new Date(Date.UTC( diaActual.getUTCFullYear(), diaActual.getUTCMonth(), diaActual.getUTCDate(), parseInt(horaFinParts[0]), parseInt(horaFinParts[1]), parseInt(horaFinParts[2] || '00') )); eventosGenerados.push({ id: `regla-${regla.id}-dia-${format(diaActual, 'yyyyMMdd')}`, nombre_curso: regla.nombre_curso, fecha_hora_inicio: fechaHoraInicio.toISOString(), fecha_hora_fin: fechaHoraFin.toISOString(), aula: regla.aula }); } }); }); res.json({ status: 'success', eventos: eventosGenerados }); });
 });
 // --- FIN RUTA HORARIO ---
 
 
-// --- RUTA COMEDOR (MODIFICADA CON AJUSTE SIMPLE DE HORA) ---
+// --- RUTA COMEDOR (CON AJUSTE SIMPLE DE HORA DE PERÚ) ---
 app.post('/comedor/reservar', (req, res) => {
   const { codigoAlumno, dni } = req.body;
   if (!codigoAlumno || !dni) {
     return res.status(400).json({ status: 'error', message: 'Código de alumno y DNI son requeridos' });
   }
 
-  // Iniciar Transacción
   db.beginTransaction(err => {
     if (err) { console.error("Error iniciando TX:", err); return res.status(500).json({ status: 'error', message: 'Error interno (TX)' }); }
 
-    // Paso 1 (Dentro TX): Buscar Usuario
     const queryBuscarUsuario = 'SELECT id FROM usuarios WHERE codigo_alumno = ? AND dni = ?';
     db.query(queryBuscarUsuario, [codigoAlumno, dni], (err, users) => {
       if (err) { return db.rollback(() => res.status(500).json({ status: 'error', message: 'Error DB buscando usuario' })); }
@@ -69,20 +91,16 @@ app.post('/comedor/reservar', (req, res) => {
       // --- ¡MODIFICACIÓN DE HORA (Simple)! ---
       const fechaActualUTC = new Date(); // Hora UTC del servidor (Railway)
       
-      // Obtiene la fecha de HOY (en UTC) para la BD
+      // Usa la fecha UTC para la BD. (ADVERTENCIA: Si son las 2AM UTC (9PM en Perú), 
+      // esto guardará la reserva para el DÍA SIGUIENTE. Es el riesgo de este método simple).
       const hoyStr = format(fechaActualUTC, 'yyyy-MM-dd'); 
       
       // Obtiene la hora UTC (0-23) y le RESTA 5 para simular la hora de Perú
-      const horaActual = getHours(fechaActualUTC) - 5; 
+      let horaActual = getHours(fechaActualUTC) - 5; 
       
-      // Ajuste por si es medianoche en Perú pero ya es el día siguiente en UTC
-      // (Esta es la debilidad de este método simple, pero funcionará la mayor parte del tiempo)
-      // Ejemplo: 1 AM UTC (8 PM en Perú) - 5 = -4. 
-      // Si la hora es negativa, le sumamos 24 para obtener la hora correcta del día anterior (en UTC)
+      // Ajuste simple si la resta da negativo (ej. 2 AM UTC - 5 = -3)
       if (horaActual < 0) {
-          // horaActual = horaActual + 24; // (Ej: -4 + 24 = 20, o sea 8 PM)
-          // Nota: La fecha (hoyStr) también estaría incorrecta en este caso.
-          // Para esta solución simple, nos enfocaremos solo en la hora de reserva.
+          horaActual = horaActual + 24; // (ej: -3 + 24 = 21, o sea 9 PM en Perú)
       }
       // --- FIN DE LA MODIFICACIÓN DE HORA ---
 
@@ -94,19 +112,14 @@ app.post('/comedor/reservar', (req, res) => {
       else if (horaActual >= 18 && horaActual < 21) { tipoComida = 'Cena'; }
       else { return db.rollback(() => res.json({ status: 'error', message: `No hay servicio de comedor disponible en este horario (${horaActual}h en Perú)` })); }
 
-      // Paso 2 (Dentro TX): Verificar reserva existente
+      // ... (El resto de tu lógica de transacción continúa igual) ...
       const queryVerificarReserva = 'SELECT id FROM reservas_comedor WHERE usuario_id = ? AND fecha_reserva = ? AND tipo_comida = ?';
       db.query(queryVerificarReserva, [usuarioId, hoyStr, tipoComida], (err, reservasExistentes) => {
         if (err) { return db.rollback(() => res.status(500).json({ status: 'error', message: 'Error DB verificando reserva' })); }
         if (reservasExistentes.length > 0) { return db.rollback(() => res.json({ status: 'error', message: `Ya tienes una reserva para ${tipoComida} hoy` })); }
 
-        // --- INICIO DE CONSULTAS SEPARADAS PARA CUPOS ---
         const cuposTotalesDefault = tipoComida === 'Almuerzo' ? 100 : 50;
-        const queryAsegurarCupos = `
-          INSERT INTO cupos_comedor (fecha, tipo_comida, cupos_totales, cupos_disponibles)
-          VALUES (?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE id=id;
-        `;
+        const queryAsegurarCupos = ` INSERT INTO cupos_comedor (fecha, tipo_comida, cupos_totales, cupos_disponibles) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=id; `;
         db.query(queryAsegurarCupos, [hoyStr, tipoComida, cuposTotalesDefault, cuposTotalesDefault], (err, resultInsert) => {
            if (err) { console.error("Error asegurando fila de cupos (TX):", err); return db.rollback(() => res.status(500).json({ status: 'error', message: 'Error DB preparando cupos' })); }
            const querySeleccionarCupos = 'SELECT cupos_disponibles FROM cupos_comedor WHERE fecha = ? AND tipo_comida = ? FOR UPDATE';
