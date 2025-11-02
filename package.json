@@ -12,6 +12,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "express": "^5.1.0",
     "mysql2": "^3.15.3"
   }
