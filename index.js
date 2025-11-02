@@ -5,7 +5,7 @@ const cors = require('cors');
 
 // Importa las funciones necesarias de date-fns
 const { eachDayOfInterval, getDay, parseISO, format, getHours, startOfDay, endOfDay } = require('date-fns');
-// --- IMPORTACIÓN AÑADIDA PARA ZONA HORARIA ---
+// Importa las funciones de ZONA HORARIA
 const { utcToZonedTime } = require('date-fns-tz');
 
 // 2. Crear el servidor API
