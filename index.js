@@ -3,9 +3,10 @@ const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 
-
 // Importa las funciones necesarias de date-fns
 const { eachDayOfInterval, getDay, parseISO, format, getHours, startOfDay, endOfDay } = require('date-fns');
+// --- IMPORTACIÓN AÑADIDA PARA ZONA HORARIA ---
+const { utcToZonedTime } = require('date-fns-tz');
 
 // 2. Crear el servidor API
 const app = express();
@@ -16,8 +17,8 @@ app.use(express.json());
 
 // 4. Conectar a la Base de Datos
 const db = mysql.createConnection({
-  host: process.env.MYSQLHOST,       // Railway te dará esta variable
-  user: process.env.MYSQLUSER,       // Railway te dará esta variable
+  host: process.env.MYSQLHOST,     // Railway te dará esta variable
+  user: process.env.MYSQLUSER,     // Railway te dará esta variable
   password: process.env.MYSQLPASSWORD, // Railway te dará esta variable
   database: process.env.MYSQLDATABASE, // Railway te dará esta variable
   port: process.env.MYSQLPORT        // Railway te dará esta variable
@@ -147,7 +148,7 @@ app.get('/horario/:usuarioId', (req, res) => {
 // --- FIN RUTA HORARIO ---
 
 
-// --- RUTA COMEDOR CON TRANSACCIONES Y CONSULTAS SEPARADAS (MÁS SEGURO) ---
+// --- RUTA COMEDOR (MODIFICADA CON HORA DE PERÚ) ---
 app.post('/comedor/reservar', (req, res) => {
   const { codigoAlumno, dni } = req.body;
   if (!codigoAlumno || !dni) {
@@ -164,12 +165,26 @@ app.post('/comedor/reservar', (req, res) => {
       if (err) { return db.rollback(() => res.status(500).json({ status: 'error', message: 'Error DB buscando usuario' })); }
       if (users.length === 0) { return db.rollback(() => res.json({ status: 'error', message: 'Código de alumno o DNI no encontrado/inválido' })); }
       const usuarioId = users[0].id;
-      const fechaActual = new Date(); const hoyStr = format(fechaActual, 'yyyy-MM-dd'); const horaActual = getHours(fechaActual);
-      let tipoComida; // Determinar tipoComida...
+      
+      // --- ¡MODIFICACIÓN DE HORA! ---
+      const fechaActualUTC = new Date(); // Hora UTC del servidor (Railway)
+      const zonaHorariaPeru = 'America/Lima'; // Zona horaria de Perú
+      // Convierte la hora UTC a la hora de Lima
+      const fechaActualPeru = utcToZonedTime(fechaActualUTC, zonaHorariaPeru); 
+
+      // Usa la fecha de Perú para la BD (formato YYYY-MM-DD)
+      const hoyStr = format(fechaActualPeru, 'yyyy-MM-dd'); 
+      // Usa la hora de Perú para la lógica (número 0-23)
+      const horaActual = getHours(fechaActualPeru); 
+      // --- FIN DE LA MODIFICACIÓN DE HORA ---
+
+      console.log(`Hora UTC: ${fechaActualUTC}, Hora en Perú: ${fechaActualPeru} (Hora: ${horaActual})`); // Log
+
+      let tipoComida; // Determinar tipoComida... (esta lógica ahora usa la hora de Perú)
       if (horaActual >= 7 && horaActual < 10) { tipoComida = 'Desayuno'; }
       else if (horaActual >= 12 && horaActual < 16) { tipoComida = 'Almuerzo'; }
       else if (horaActual >= 18 && horaActual < 21) { tipoComida = 'Cena'; }
-      else { return db.rollback(() => res.json({ status: 'error', message: 'No hay servicio de comedor disponible en este horario' })); }
+      else { return db.rollback(() => res.json({ status: 'error', message: `No hay servicio de comedor disponible en este horario (${horaActual}h en Perú)` })); }
 
       // Paso 2 (Dentro TX): Verificar reserva existente
       const queryVerificarReserva = 'SELECT id FROM reservas_comedor WHERE usuario_id = ? AND fecha_reserva = ? AND tipo_comida = ?';
@@ -285,7 +300,7 @@ app.get('/cursos/:usuarioId', (req, res) => {
       return res.status(500).json({ status: 'error', message: 'Error del servidor al buscar cursos' });
     }
     console.log(`Enviando ${results.length} cursos para el usuario.`);
-    const cursosFormateados = results.map(curso => ({
+    const cursosFormateadas = results.map(curso => ({
         id: curso.curso_id,
         name: curso.nombre_curso,
         location: curso.aula
